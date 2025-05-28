@@ -96,7 +96,7 @@ SELECT
     FLOOR(SUM(sales.quantity * products.price)) AS income
 FROM sales
 LEFT JOIN customers ON sales.customer_id = customers.customer_id
-LEFT JOIN products ON  sales.product_id = products.product_id
+LEFT JOIN products ON sales.product_id = products.product_id
 GROUP BY TO_CHAR(DATE_TRUNC('month', sales.sale_date), 'YYYY-MM')
 ORDER BY selling_month;
 
