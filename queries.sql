@@ -41,32 +41,33 @@ CROSS JOIN total_average
 WHERE employee_sales.avg_emp_income < total_average.total_avg
 ORDER BY employee_sales.avg_emp_income;
 
---show average income for evely salesperson for various weekday
---sorted by weekday name
+-- Show total income for every salesperson by weekday
 WITH sales_by_day AS (
     SELECT
         CONCAT(employees.first_name, ' ', employees.last_name) AS seller,
-        TO_CHAR(sales.sale_date, 'FMDay') AS day_name,
+        LOWER(TO_CHAR(sales.sale_date, 'FMDay')) AS day_of_week,
         CASE
             WHEN EXTRACT(DOW FROM sales.sale_date) = 0 THEN 7
             ELSE EXTRACT(DOW FROM sales.sale_date)
-        END AS day_order,
-        ROUND(SUM(sales.quantity * products.price), 0) AS income
-    FROM sales
+        END AS weekday_order,
+        FLOOR(SUM(sales.quantity * products.price)) AS income
+    FROM employees
+    LEFT JOIN sales ON employees.employee_id = sales.sales_person_id
     LEFT JOIN products ON sales.product_id = products.product_id
-    LEFT JOIN employees ON sales.sales_person_id = employees.employee_id
     GROUP BY
         employees.first_name,
         employees.last_name,
-        TO_CHAR(sales.sale_date, 'FMDay'), day_order
+        LOWER(TO_CHAR(sales.sale_date, 'FMDay')),
+        weekday_order
 )
 
 SELECT
     seller,
-    day_name,
+    day_of_week,
     income
 FROM sales_by_day
-ORDER BY day_order, seller;
+ORDER BY weekday_order, seller;
+
 
 --count customers into age categories 
 --step 6
@@ -86,15 +87,16 @@ FROM (
 GROUP BY age_category
 ORDER BY age_category;
 
---counting unique customers by month and total income within that month
+--counting unique customers by month and total 
+--income within that month
 --step 6
 SELECT
-    ROUND(SUM(sales.quantity * products.price), 0) AS income,
+    TO_CHAR(DATE_TRUNC('month', sales.sale_date), 'YYYY-MM') AS selling_month,
     COUNT(DISTINCT customers.customer_id) AS total_customers,
-    TO_CHAR(DATE_TRUNC('month', sales.sale_date), 'YYYY-MM') AS selling_month
+    FLOOR(SUM(sales.quantity * products.price)) AS income
 FROM sales
-LEFT JOIN products ON products.product_id = sales.product_id
-LEFT JOIN customers ON customers.customer_id = sales.customer_id
+LEFT JOIN customers ON sales.customer_id = customers.customer_id
+LEFT JOIN products ON  sales.product_id = products.product_id
 GROUP BY TO_CHAR(DATE_TRUNC('month', sales.sale_date), 'YYYY-MM')
 ORDER BY selling_month;
 
@@ -103,9 +105,9 @@ ORDER BY selling_month;
 WITH all_first_action_sales AS (
     SELECT DISTINCT ON (customers.customer_id)
         customers.customer_id AS id,
-        CONCAT(customers.first_name, ' ', customers.last_name) AS customer,
         sales.sale_date::DATE AS sale_date,
-        products.price AS price,
+        products.price,
+        CONCAT(customers.first_name, ' ', customers.last_name) AS customer,
         CONCAT(employees.first_name, ' ', employees.last_name) AS seller
     FROM sales
     LEFT JOIN customers ON sales.customer_id = customers.customer_id
@@ -121,8 +123,3 @@ SELECT
     all_first_action_sales.seller
 FROM all_first_action_sales
 ORDER BY all_first_action_sales.id;
-
-
-
-
-
