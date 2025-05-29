@@ -41,8 +41,8 @@ SELECT
     TO_CHAR(sales.sale_date, 'FMday') AS day_of_week,
     FLOOR(SUM(sales.quantity * products.price)) AS income
 FROM employees
-LEFT JOIN sales ON employees.employee_id = sales.sales_person_id
-LEFT JOIN products ON sales.product_id = products.product_id
+INNER JOIN sales ON employees.employee_id = sales.sales_person_id
+INNER JOIN products ON sales.product_id = products.product_id
 GROUP BY
     employees.first_name,
     employees.last_name,
