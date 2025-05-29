@@ -14,76 +14,54 @@ GROUP BY employees.first_name, employees.last_name
 ORDER BY income DESC LIMIT 10;
 
 --show employees, that selles below total average
-WITH employee_sales AS (
-    SELECT
-        CONCAT(employees.first_name, ' ', employees.last_name) AS seller,
-        ROUND(SUM(sales.quantity * products.price) / COUNT(sales.sales_id), 0)
-        AS avg_emp_income
-    FROM sales
-    LEFT JOIN products ON sales.product_id = products.product_id
-    LEFT JOIN employees ON sales.sales_person_id = employees.employee_id
-    GROUP BY employees.first_name, employees.last_name
-),
-
-total_average AS (
-    SELECT
-        ROUND(SUM(sales.quantity * products.price) / COUNT(sales.sales_id), 0)
-        AS total_avg
-    FROM sales
-    LEFT JOIN products ON sales.product_id = products.product_id
-)
-
-SELECT
-    employee_sales.seller,
-    employee_sales.avg_emp_income
-FROM employee_sales
-CROSS JOIN total_average
-WHERE employee_sales.avg_emp_income < total_average.total_avg
-ORDER BY employee_sales.avg_emp_income;
-
--- Show total income for every salesperson by weekday
-WITH sales_by_day AS (
-    SELECT
-        CONCAT(employees.first_name, ' ', employees.last_name) AS seller,
-        LOWER(TO_CHAR(sales.sale_date, 'FMDay')) AS day_of_week,
-        CASE
-            WHEN EXTRACT(DOW FROM sales.sale_date) = 0 THEN 7
-            ELSE EXTRACT(DOW FROM sales.sale_date)
-        END AS weekday_order,
-        FLOOR(SUM(sales.quantity * products.price)) AS income
-    FROM employees
-    LEFT JOIN sales ON employees.employee_id = sales.sales_person_id
-    LEFT JOIN products ON sales.product_id = products.product_id
-    GROUP BY
-        employees.first_name,
-        employees.last_name,
-        LOWER(TO_CHAR(sales.sale_date, 'FMDay')),
-        weekday_order
-)
-
 SELECT
     seller,
-    day_of_week,
-    income
-FROM sales_by_day
-ORDER BY weekday_order, seller;
+    average_income
+FROM (
+    SELECT
+        seller,
+        average_income,
+        FLOOR(AVG(average_income) OVER ()) AS total_average
+    FROM (
+        SELECT
+            CONCAT(employees.first_name, ' ', employees.last_name) AS seller,
+            FLOOR(AVG(sales.quantity * products.price)) AS average_income
+        FROM sales
+        LEFT JOIN products ON sales.product_id = products.product_id
+        LEFT JOIN employees ON sales.sales_person_id = employees.employee_id
+        GROUP BY employees.first_name, employees.last_name
+    ) AS employee_sales
+) AS with_total
+WHERE average_income < total_average
+ORDER BY average_income;
 
+-- Show total income for every salesperson by weekday
+SELECT
+    CONCAT(employees.first_name, ' ', employees.last_name) AS seller,
+    TO_CHAR(sales.sale_date, 'FMday') AS day_of_week,
+    FLOOR(SUM(sales.quantity * products.price)) AS income
+FROM employees
+LEFT JOIN sales ON employees.employee_id = sales.sales_person_id
+LEFT JOIN products ON sales.product_id = products.product_id
+GROUP BY
+    employees.first_name,
+    employees.last_name,
+    TO_CHAR(sales.sale_date, 'FMday'),
+    EXTRACT(ISODOW FROM sales.sale_date)
+ORDER BY
+    EXTRACT(ISODOW FROM sales.sale_date),
+    seller;
 
 --count customers into age categories 
 --step 6
 SELECT
-    age_category,
-    COUNT(customer) AS age_count
-FROM (
-    SELECT
-        customer_id AS customer,
-        CASE
-            WHEN age BETWEEN 16 AND 25 THEN '16-25'
-            WHEN age BETWEEN 26 AND 40 THEN '26-40'
-            ELSE '40+'
-        END AS age_category
-    FROM customers
-) AS age_categories
+    CASE
+        WHEN age BETWEEN 16 AND 25 THEN '16-25'
+        WHEN age BETWEEN 26 AND 40 THEN '26-40'
+        ELSE '40+'
+    END AS age_category,
+    COUNT(*) AS age_count
+FROM customers
 GROUP BY age_category
 ORDER BY age_category;
 
@@ -102,24 +80,20 @@ ORDER BY selling_month;
 
 -- selecting all customers, who has made their first purchase via action
 -- step 6
-WITH all_first_action_sales AS (
-    SELECT DISTINCT ON (customers.customer_id)
-        customers.customer_id AS id,
-        sales.sale_date::DATE AS sale_date,
-        products.price,
-        CONCAT(customers.first_name, ' ', customers.last_name) AS customer,
-        CONCAT(employees.first_name, ' ', employees.last_name) AS seller
-    FROM sales
-    LEFT JOIN customers ON sales.customer_id = customers.customer_id
-    LEFT JOIN products ON sales.product_id = products.product_id
-    LEFT JOIN employees ON sales.sales_person_id = employees.employee_id
-    WHERE products.price = 0
-    ORDER BY customers.customer_id, sales.sale_date
-)
-
 SELECT
-    all_first_action_sales.customer,
-    all_first_action_sales.sale_date,
-    all_first_action_sales.seller
-FROM all_first_action_sales
-ORDER BY all_first_action_sales.id;
+    CONCAT(customers.first_name, ' ', customers.last_name) AS customer,
+    sales.sale_date::DATE AS sale_date,
+    CONCAT(employees.first_name, ' ', employees.last_name) AS seller
+FROM (
+    SELECT
+        sales.*,
+        ROW_NUMBER() OVER (PARTITION BY sales.customer_id 
+        ORDER BY sales.sale_date) AS rn
+    FROM sales
+    LEFT JOIN products ON sales.product_id = products.product_id
+    WHERE products.price = 0
+) AS sales
+LEFT JOIN customers ON sales.customer_id = customers.customer_id
+LEFT JOIN employees ON sales.sales_person_id = employees.employee_id
+WHERE sales.rn = 1
+ORDER BY sales.customer_id;
