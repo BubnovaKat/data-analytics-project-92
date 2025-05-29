@@ -80,15 +80,17 @@ ORDER BY selling_month;
 
 -- selecting all customers, who has made their first purchase via action
 -- step 6
-SELECT
+SELECT -- noqa: ST06
     CONCAT(customers.first_name, ' ', customers.last_name) AS customer,
     sales.sale_date::DATE AS sale_date,
     CONCAT(employees.first_name, ' ', employees.last_name) AS seller
 FROM (
     SELECT
         sales.*,
-        ROW_NUMBER() OVER (PARTITION BY sales.customer_id 
-        ORDER BY sales.sale_date) AS rn
+        ROW_NUMBER() OVER (
+            PARTITION BY sales.customer_id
+            ORDER BY sales.sale_date
+        ) AS rn
     FROM sales
     LEFT JOIN products ON sales.product_id = products.product_id
     WHERE products.price = 0
